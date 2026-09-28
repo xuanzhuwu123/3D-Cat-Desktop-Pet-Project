@@ -14,6 +14,18 @@ export const VIEW = {
   radius: 1.05,     // 相对"刚好装下模型"距离的倍数
   minRadius: 0.4,
   maxRadius: 2.5,
+
+  // 暖色柔光：环境贴图本身是中性白，降低它的比重，用暖色半球光和主光把整体色调拉暖
+  envIntensity: 0.6,          // 环境贴图强度（原来相当于 1）
+  hemiSky: 0xffe6c8,          // 半球光天空色：奶油暖白
+  hemiGround: 0x9a7358,       // 半球光地面色：暖棕反光，让肚子和下巴不发灰
+  hemiIntensity: 0.9,
+  keyColor: 0xffd2a1,         // 主光（兼投影）：午后暖阳
+  keyIntensity: 0.9,
+  keyOffset: [0.6, 1.0, 0.8], // 主光方向（侧前上方），相对模型尺寸
+  // 材质柔化：更粗糙、镜面反射更弱，看起来像绒毛而不是塑料
+  minRoughness: 0.75,
+  envMapIntensity: 0.7,
 };
 
 export function setupLighting(renderer, scene) {
@@ -24,10 +36,15 @@ export function setupLighting(renderer, scene) {
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = VIEW.envIntensity;
   pmrem.dispose();
 
-  // 顶光只负责投出地面软阴影，强度很低，主要照明来自环境贴图
-  const shadowLight = new THREE.DirectionalLight(0xffffff, 0.3);
+  // 暖色半球光：天空奶油色、地面暖棕色，整体铺一层柔和的暖调
+  const hemiLight = new THREE.HemisphereLight(VIEW.hemiSky, VIEW.hemiGround, VIEW.hemiIntensity);
+  scene.add(hemiLight);
+
+  // 暖色主光：从侧前上方照过来，同时负责投出地面软阴影
+  const shadowLight = new THREE.DirectionalLight(VIEW.keyColor, VIEW.keyIntensity);
   shadowLight.castShadow = true;
   shadowLight.shadow.mapSize.set(512, 512);
   shadowLight.shadow.radius = 2 + VIEW.shadowSoftness * 12;
@@ -42,7 +59,7 @@ export function setupLighting(renderer, scene) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  return { shadowLight, ground };
+  return { shadowLight, hemiLight, ground };
 }
 
 // 把地面和阴影相机对齐到模型的包围盒
@@ -55,17 +72,19 @@ export function fitShadowToModel(lighting, box) {
   ground.position.set(center.x, box.min.y, center.z);
   ground.scale.set(extent * 2, extent * 2, 1);
 
-  shadowLight.position.set(center.x, box.max.y + size.y * 2, center.z);
+  const [ox, oy, oz] = VIEW.keyOffset;
+  const dist = Math.max(size.x, size.y, size.z) * 2;
+  shadowLight.position.set(center.x + ox * dist, box.max.y + oy * dist, center.z + oz * dist);
   shadowLight.target.position.set(center.x, box.min.y, center.z);
   const cam = shadowLight.shadow.camera;
   cam.left = cam.bottom = -extent;
   cam.right = cam.top = extent;
   cam.near = 0.01;
-  cam.far = size.y * 4;
+  cam.far = dist * 4;
   cam.updateProjectionMatrix();
 }
 
-// 材质打磨：开启投影、提高贴图各向异性过滤
+// 材质打磨：开启投影、提高贴图各向异性过滤、柔化高光
 export function polishMaterials(root, renderer) {
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   root.traverse((obj) => {
@@ -76,6 +95,8 @@ export function polishMaterials(root, renderer) {
       for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
         if (mat[key]) mat[key].anisotropy = maxAniso;
       }
+      if ('roughness' in mat) mat.roughness = Math.max(mat.roughness, VIEW.minRoughness);
+      if ('envMapIntensity' in mat) mat.envMapIntensity = VIEW.envMapIntensity;
     }
   });
 }
