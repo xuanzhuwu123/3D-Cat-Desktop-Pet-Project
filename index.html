@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>橘猫推杯子 · 3D 预览</title>
+<style>
+  :root{
+    --bg:#FBF3E7;
+    --bg-card:#FFFFFF;
+    --ink:#3A2E22;
+    --ink-soft:#7A6A57;
+    --orange:#E8792B;
+    --orange-deep:#C85A15;
+    --line:#EBDFCB;
+    --radius:20px;
+  }
+  * { box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+    line-height:1.6;
+  }
+  header{ padding:56px 24px 24px; text-align:center; }
+  header .eyebrow{
+    font-size:14px; letter-spacing:4px; text-transform:uppercase;
+    color:var(--orange-deep); font-weight:700; margin:0 auto 12px;
+  }
+  header h1{ font-size:40px; margin:0 0 12px; font-weight:800; }
+  header p{ color:var(--ink-soft); font-size:16px; max-width:560px; margin:0 auto; }
+  main{
+    max-width:1000px; margin:0 auto; padding:24px;
+    display:flex; flex-direction:column; gap:32px;
+  }
+  .card{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:0 8px 24px rgba(58,46,34,0.06); overflow:hidden;
+  }
+  .viewer-card{ position:relative; }
+  .viewer-stage{
+    display:block; width:100%; height:min(62vh, 560px);
+    background:radial-gradient(circle at 50% 35%, #FFF6E9 0%, #F4E4CB 65%, #EBD6B4 100%);
+  }
+  .viewer-controls{
+    display:flex; flex-wrap:wrap; align-items:center; gap:16px;
+    padding:18px 24px; border-top:1px solid var(--line); background:#FFFDF9;
+  }
+  .viewer-controls label{ font-size:13px; color:var(--ink-soft); font-weight:600; margin-right:6px; }
+  select, button{
+    font-family:inherit; font-size:14px; border-radius:999px; border:1px solid var(--line);
+    padding:9px 18px; background:#fff; color:var(--ink); cursor:pointer;
+  }
+  button.primary{ background:var(--orange); border-color:var(--orange); color:#fff; font-weight:700; }
+  button.primary:hover{ background:var(--orange-deep); }
+  select:hover, button:hover{ border-color:var(--orange); }
+  .hint{ font-size:13px; color:var(--ink-soft); margin-left:auto; }
+  .hint.error{ color:#B3261E; margin-left:0; width:100%; }
+  .progress-wrap{ position:absolute; left:0; right:0; top:0; height:4px; z-index:2; }
+  .progress-bar{ height:100%; width:0%; background:var(--orange); transition:width .15s ease; }
+  section.card .inner, .card .inner{ padding:28px 28px 32px; }
+  h2.section-title{ font-size:20px; margin:0 0 6px; }
+  .section-sub{ font-size:14px; color:var(--ink-soft); margin:0 0 20px; }
+  video{ width:100%; border-radius:12px; display:block; background:#000; }
+  .file-row{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:16px 0; border-bottom:1px solid var(--line);
+  }
+  .file-row:last-child{ border-bottom:none; }
+  .file-name{ font-weight:700; font-size:15px; }
+  .file-desc{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
+  .file-row a{
+    flex-shrink:0; text-decoration:none; font-size:13px; font-weight:700;
+    color:var(--orange-deep); border:1px solid var(--orange); padding:8px 16px; border-radius:999px;
+  }
+  .file-row a:hover{ background:var(--orange); color:#fff; }
+  footer{ text-align:center; padding:40px 24px 60px; color:var(--ink-soft); font-size:13px; }
+  .viewer-stage{ position:relative; overflow:hidden; cursor:grab; }
+  .viewer-stage:active{ cursor:grabbing; }
+  .viewer-stage canvas{ display:block; width:100%; height:100%; outline:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">3D Character Preview</p>
+  <h1>🐱 橘猫推杯子</h1>
+  <p>绑定骨骼的橘色小猫模型，带一段"推杯子"的动画。拖拽旋转、滚轮缩放，也可以切换下方的模型版本。</p>
+</header>
+
+<main>
+  <div class="card viewer-card">
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div
+      id="viewer"
+      class="viewer-stage"
+      role="img"
+      aria-label="橘色小猫绑定骨骼3D模型，带推杯子动画">
+    </div>
+    <div class="viewer-controls">
+      <div>
+        <label for="modelSelect">模型版本</label>
+        <select id="modelSelect">
+          <option value="anim" selected>动画版（推杯子）</option>
+          <option value="static">绑定版（静态姿势）</option>
+        </select>
+      </div>
+      <button class="primary" id="playToggle">⏸ 暂停动画</button>
+      <button id="resetView">重置视角</button>
+      <span class="hint" id="loadHint">模型加载中…</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="inner">
+      <h2 class="section-title">渲染预览视频</h2>
+      <p class="section-sub">Blender 中的推杯子场景渲染片段（含杯子），供对照参考</p>
+      <video id="previewVideo" controls playsinline muted loop></video>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="inner">
+      <h2 class="section-title">素材下载</h2>
+      <p class="section-sub">点击即可下载原始文件</p>
+      <div class="file-row">
+        <div>
+          <div class="file-name">cat_rigged_v2_animated.glb</div>
+          <div class="file-desc">绑定骨骼 + 推杯子动画（CatRigAction） · glTF 2.0 · 约 11.4 MB</div>
+        </div>
+        <a id="dlGlb" href="#" download="cat_rigged_v2_animated.glb">下载</a>
+      </div>
+      <div class="file-row">
+        <div>
+          <div class="file-name">preview.mp4</div>
+          <div class="file-desc">Blender 渲染预览视频 · 960×540 · 6.5 秒</div>
+        </div>
+        <a id="dlMp4" href="#" download="preview.mp4">下载</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>模块化版本：查看器代码在 src/，模型和视频在 assets/。请用 npm run dev 启动本地服务器后打开。</footer>
+
+<script>
+  // ES Module 不能在 file:// 下加载，双击打开时给出提示
+  if (location.protocol === 'file:') {
+    var h = document.getElementById('loadHint');
+    h.textContent = '请在项目目录运行 npm install 和 npm run dev，然后用终端里显示的地址打开本页面。';
+    h.className = 'hint error';
+  }
+</script>
+<script type="module" src="src/main.js"></script>
+
+</body>
+</html>
